@@ -116,7 +116,9 @@ struct WatchPartyRoomView: View {
         case .connecting:
             banner(color: .orange, text: "กำลังเชื่อมต่อเซิร์ฟเวอร์…", system: "antenna.radiowaves.left.and.right")
         case .connected:
-            banner(color: .green, text: "เชื่อมต่อแล้ว · เล่น/หยุด/เลื่อน จะซิงก์ให้ทุกคน", system: "checkmark.circle.fill")
+            banner(color: .green,
+                   text: "เชื่อมต่อแล้ว · ซิงก์ชดเชยดีเลย์" + (vm.rttMillis > 0 ? " (~\(vm.rttMillis)ms)" : ""),
+                   system: "checkmark.circle.fill")
         case .closed(let reason):
             Button { vm.connect() } label: {
                 banner(color: Theme.brand, text: "ไม่ได้เชื่อมต่อ: \(reason) — แตะเพื่อลองใหม่", system: "exclamationmark.triangle.fill")

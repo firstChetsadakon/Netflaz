@@ -12,6 +12,9 @@ import WebKit
 ///    exposes functions native code can call to apply remote actions.
 ///  • Those events ride the exact same WebSocket `PartyMessage` protocol and
 ///    server used by the in-app player, so a room stays in lock-step.
+///  • **Latency compensation:** positions are carried on a shared clock
+///    (`ClockSync`) and advanced by the message's in-flight time, so viewers
+///    land on the host's current position.
 ///
 /// This is pointed at embeddable content (open media, or a URL the user is
 /// allowed to embed). DRM streaming sites block WKWebView embedding and
@@ -28,6 +31,7 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
     @Published private(set) var participants: [Participant] = []
     @Published private(set) var connectionState: ConnectionState = .idle
     @Published private(set) var isLoadingPage = true
+    @Published private(set) var rttMillis: Int = 0
 
     let media: Media
     let roomId: String
@@ -40,7 +44,9 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
     private let customURL: String?
 
     private let client = WatchPartyClient()
+    private let clock = ClockSync()
     private var syncTimer: Timer?
+    private var pingTimer: Timer?
 
     init(media: Media, userName: String, roomId: String, serverURL: URL, isHost: Bool, customURL: String?) {
         self.media = media
@@ -86,8 +92,8 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
     }
 
     func leave() {
-        syncTimer?.invalidate()
-        syncTimer = nil
+        syncTimer?.invalidate(); syncTimer = nil
+        pingTimer?.invalidate(); pingTimer = nil
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "coWatch")
         send(.leave)
         client.disconnect()
@@ -109,41 +115,46 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
               let body = message.body as? [String: Any],
               let type = body["type"] as? String else { return }
         let time = (body["time"] as? NSNumber)?.doubleValue ?? (body["time"] as? Double)
+        let playing = (body["playing"] as? NSNumber)?.boolValue ?? (body["playing"] as? Bool)
         switch type {
-        case "play": send(.play, time: time)
-        case "pause": send(.pause, time: time)
-        case "seek": send(.seek, time: time)
+        case "play": send(.play, time: time, isPlaying: true)
+        case "pause": send(.pause, time: time, isPlaying: false)
+        case "seek": send(.seek, time: time, isPlaying: playing)
         default: break
         }
     }
 
     // MARK: - WKNavigationDelegate
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        isLoadingPage = false
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        isLoadingPage = false
-    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { isLoadingPage = false }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { isLoadingPage = false }
 
     // MARK: - WatchPartyClientDelegate (native <-> server)
 
     func partyClientDidConnect(_ client: WatchPartyClient) {
         connectionState = .connected
+        startClockSync()
         send(.join, text: isHost ? "host" : "viewer")
         appendSystem("เชื่อมต่อห้อง \"\(roomId)\" สำเร็จ")
         if isHost { startHostHeartbeat() }
     }
 
     func partyClient(_ client: WatchPartyClient, didReceive message: PartyMessage) {
+        if message.type == .pong {
+            if let c = message.clientTime, let s = message.serverTime {
+                clock.handlePong(clientSend: c, serverTime: s)
+                rttMillis = Int(clock.rttMillis.rounded())
+            }
+            return
+        }
+
         if message.userId == userId, message.type != .roster, message.type != .hello { return }
 
         switch message.type {
-        case .play: applyToVideo("play", message.time)
+        case .play: applyToVideo("play", compensatedTarget(message))
         case .pause: applyToVideo("pause", message.time)
-        case .seek: applyToVideo("seek", message.time)
-        case .sync: if !isHost { applyToVideo("sync", message.time) }
+        case .seek: applyToVideo("seek", compensatedTarget(message) ?? message.time)
+        case .sync: if !isHost { applyToVideo("sync", compensatedTarget(message)) }
         case .chat:
             if let text = message.text {
                 chat.append(ChatMessage(userId: message.userId, userName: message.userName, text: text, date: Date()))
@@ -156,22 +167,28 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
                     Participant(id: $0.userId, name: $0.userName, isHost: $0.isHost, isMe: $0.userId == userId)
                 }
             }
+        case .ping, .pong: break
         }
     }
 
     func partyClient(_ client: WatchPartyClient, didCloseWith error: Error?) {
         syncTimer?.invalidate()
+        pingTimer?.invalidate()
         connectionState = .closed(error?.localizedDescription ?? "การเชื่อมต่อถูกปิด")
         appendSystem("หลุดการเชื่อมต่อ — ออกแล้วเข้าห้องใหม่อีกครั้ง")
     }
 
-    // MARK: - Helpers
+    // MARK: - Latency compensation
 
-    private func applyToVideo(_ type: String, _ time: Double?) {
-        let t = time.map { String($0) } ?? "null"
-        webView.evaluateJavaScript("window.__coWatchApply && window.__coWatchApply('\(type)', \(t));",
-                                   completionHandler: nil)
+    private func compensatedTarget(_ message: PartyMessage) -> Double? {
+        guard let media = message.time else { return nil }
+        guard clock.isSynced, let sampledAt = message.serverTime else { return media }
+        let elapsed = max(0, (clock.serverNowMillis() - sampledAt) / 1000)
+        let playing = message.isPlaying ?? false
+        return media + (playing ? elapsed : 0)
     }
+
+    // MARK: - Timers
 
     private func startHostHeartbeat() {
         syncTimer?.invalidate()
@@ -183,19 +200,58 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
     }
 
     private func broadcastSync() {
-        webView.evaluateJavaScript("window.__coWatchTime ? window.__coWatchTime() : null") { [weak self] result, _ in
+        webView.evaluateJavaScript("window.__coWatchState ? JSON.stringify(window.__coWatchState()) : null") { [weak self] result, _ in
             guard let self else { return }
-            let time = (result as? NSNumber)?.doubleValue ?? (result as? Double)
-            self.send(.sync, time: time)
+            var time: Double? = nil
+            var playing = true
+            if let json = result as? String,
+               let data = json.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                time = (obj["time"] as? NSNumber)?.doubleValue ?? (obj["time"] as? Double)
+                playing = (obj["playing"] as? NSNumber)?.boolValue ?? (obj["playing"] as? Bool) ?? true
+            }
+            self.send(.sync, time: time, isPlaying: playing)
         }
     }
 
-    private func send(_ type: PartyMessage.Kind, time: Double? = nil, text: String? = nil) {
+    private func startClockSync() {
+        for i in 0..<4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.25) { [weak self] in
+                self?.pingServer()
+            }
+        }
+        pingTimer?.invalidate()
+        let timer = Timer(timeInterval: 4.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pingServer() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pingTimer = timer
+    }
+
+    private func pingServer() {
         guard client.isConnected else { return }
-        client.send(PartyMessage(
+        client.send(PartyMessage(type: .ping, roomId: roomId, userId: userId, userName: userName,
+                                 clientTime: clock.nowMillis()))
+    }
+
+    // MARK: - Helpers
+
+    private func applyToVideo(_ type: String, _ time: Double?) {
+        let t = time.map { String($0) } ?? "null"
+        webView.evaluateJavaScript("window.__coWatchApply && window.__coWatchApply('\(type)', \(t));",
+                                   completionHandler: nil)
+    }
+
+    private func send(_ type: PartyMessage.Kind, time: Double? = nil, isPlaying: Bool? = nil, text: String? = nil) {
+        guard client.isConnected else { return }
+        var message = PartyMessage(
             type: type, roomId: roomId, userId: userId, userName: userName,
-            time: (time?.isFinite == true) ? time : nil, text: text
-        ))
+            time: (time?.isFinite == true) ? time : nil, isPlaying: isPlaying, text: text
+        )
+        if clock.isSynced, [.play, .pause, .seek, .sync].contains(type) {
+            message.serverTime = clock.serverNowMillis()
+        }
+        client.send(message)
     }
 
     private func appendSystem(_ text: String) {
@@ -204,7 +260,6 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
 
     // MARK: - Injected web assets
 
-    /// The page we load for built-in open content: a full-bleed HTML5 player.
     static func playerHTML(videoURL: String) -> String {
         """
         <!doctype html><html><head>
@@ -226,10 +281,11 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
       if (window.__coWatchInstalled) { return; }
       window.__coWatchInstalled = true;
       var applying = false;
+      var DRIFT = 0.4;
 
-      function post(type, time) {
+      function post(type, time, playing) {
         try {
-          window.webkit.messageHandlers.coWatch.postMessage({ type: type, time: time });
+          window.webkit.messageHandlers.coWatch.postMessage({ type: type, time: time, playing: playing });
         } catch (e) {}
       }
       function video() { return document.querySelector('video'); }
@@ -237,9 +293,9 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
       function bind(v) {
         if (!v || v.__coWatchBound) { return; }
         v.__coWatchBound = true;
-        v.addEventListener('play',   function () { if (!applying) post('play',  v.currentTime); });
-        v.addEventListener('pause',  function () { if (!applying) post('pause', v.currentTime); });
-        v.addEventListener('seeked', function () { if (!applying) post('seek',  v.currentTime); });
+        v.addEventListener('play',   function () { if (!applying) post('play',  v.currentTime, true); });
+        v.addEventListener('pause',  function () { if (!applying) post('pause', v.currentTime, false); });
+        v.addEventListener('seeked', function () { if (!applying) post('seek',  v.currentTime, !v.paused); });
       }
 
       window.__coWatchApply = function (type, time) {
@@ -249,24 +305,24 @@ final class WebCoWatchViewModel: NSObject, ObservableObject,
           if (type === 'seek' && time != null) {
             v.currentTime = time;
           } else if (type === 'play') {
-            if (time != null && Math.abs(v.currentTime - time) > 1.5) { v.currentTime = time; }
+            if (time != null && Math.abs(v.currentTime - time) > DRIFT) { v.currentTime = time; }
             v.play();
           } else if (type === 'pause') {
             if (time != null) { v.currentTime = time; }
             v.pause();
           } else if (type === 'sync' && time != null) {
-            if (Math.abs(v.currentTime - time) > 1.5) { v.currentTime = time; }
+            if (Math.abs(v.currentTime - time) > DRIFT) { v.currentTime = time; }
           }
         } catch (e) {}
-        setTimeout(function () { applying = false; }, 350);
+        setTimeout(function () { applying = false; }, 300);
       };
 
-      window.__coWatchTime = function () {
+      window.__coWatchState = function () {
         var v = video();
-        return v ? v.currentTime : null;
+        if (!v) { return { time: null, playing: true }; }
+        return { time: v.currentTime, playing: !v.paused };
       };
 
-      // The <video> may appear after load (SPA pages) — keep trying to bind.
       var tries = 0;
       var iv = setInterval(function () {
         var v = video();

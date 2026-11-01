@@ -140,11 +140,30 @@ wss.on("connection", (ws) => {
       case "leave":
         leave(ws);
         break;
-      // Transport + chat are relayed to everyone else in the room as-is.
+      // Clock sync: reply directly to the sender with a server timestamp.
+      case "ping":
+        send(ws, {
+          type: "pong",
+          roomId: msg.roomId,
+          userId: "server",
+          userName: "server",
+          clientTime: msg.clientTime,
+          serverTime: now(),
+          sentAt: now(),
+        });
+        break;
+      // Transport + sync carry a sample time on the shared (server) clock so
+      // receivers can compensate for in-flight latency. If the sender hasn't
+      // finished clock-syncing yet, stamp it here as a best-effort fallback.
       case "play":
       case "pause":
       case "seek":
       case "sync":
+        if (ws.roomId) {
+          if (msg.serverTime == null) msg.serverTime = now();
+          broadcast(ws.roomId, msg, { except: ws });
+        }
+        break;
       case "chat":
         if (ws.roomId) broadcast(ws.roomId, msg, { except: ws });
         break;

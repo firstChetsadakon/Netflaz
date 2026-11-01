@@ -14,6 +14,8 @@ struct PartyMessage: Codable {
         case chat       // a chat line
         case roster     // server -> clients: current participant list
         case hello      // server -> a client: your assigned info / room state
+        case ping       // client -> server: clock-sync probe
+        case pong       // server -> client: clock-sync reply
     }
 
     var type: Kind
@@ -24,7 +26,9 @@ struct PartyMessage: Codable {
     var isPlaying: Bool?
     var text: String?           // chat body
     var roster: [RosterEntry]?  // for .roster / .hello
-    var sentAt: Double          // epoch millis, for latency-aware reconciliation
+    var clientTime: Double?     // ping: client send time (local clock, ms)
+    var serverTime: Double?     // pong: server clock (ms); transport/sync: sample time on the shared (server) clock
+    var sentAt: Double          // epoch millis, informational
 
     init(type: Kind,
          roomId: String,
@@ -33,7 +37,9 @@ struct PartyMessage: Codable {
          time: Double? = nil,
          isPlaying: Bool? = nil,
          text: String? = nil,
-         roster: [RosterEntry]? = nil) {
+         roster: [RosterEntry]? = nil,
+         clientTime: Double? = nil,
+         serverTime: Double? = nil) {
         self.type = type
         self.roomId = roomId
         self.userId = userId
@@ -42,6 +48,8 @@ struct PartyMessage: Codable {
         self.isPlaying = isPlaying
         self.text = text
         self.roster = roster
+        self.clientTime = clientTime
+        self.serverTime = serverTime
         self.sentAt = Date().timeIntervalSince1970 * 1000
     }
 }

@@ -59,7 +59,9 @@ struct WebCoWatchView: View {
         case .connecting:
             banner(.orange, "กำลังเชื่อมต่อเซิร์ฟเวอร์…", "antenna.radiowaves.left.and.right")
         case .connected:
-            banner(.green, "เชื่อมต่อแล้ว · ผู้ชม \(max(vm.participants.count, 1)) คน", "checkmark.circle.fill")
+            banner(.green,
+                   "เชื่อมต่อแล้ว · ผู้ชม \(max(vm.participants.count, 1)) คน" + (vm.rttMillis > 0 ? " · ~\(vm.rttMillis)ms" : ""),
+                   "checkmark.circle.fill")
         case .closed(let reason):
             banner(Theme.brand, "ไม่ได้เชื่อมต่อ: \(reason)", "exclamationmark.triangle.fill")
         case .idle:

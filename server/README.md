@@ -39,7 +39,7 @@ Every frame is one JSON object mirroring `PartyMessage` in the Swift app:
 
 ```jsonc
 {
-  "type": "join|leave|play|pause|seek|sync|chat|roster|hello",
+  "type": "join|leave|play|pause|seek|sync|chat|roster|hello|ping|pong",
   "roomId": "ABCDE",
   "userId": "uuid",
   "userName": "First",
@@ -47,6 +47,8 @@ Every frame is one JSON object mirroring `PartyMessage` in the Swift app:
   "isPlaying": true,
   "text": "hello",     // chat body, or "host"/"viewer" on join
   "roster": [ ... ],   // server -> clients, current participants
+  "clientTime": 1730000000000, // ping: client send time (local clock, ms)
+  "serverTime": 1730000000005, // pong: server clock; transport/sync: sample time on the shared clock
   "sentAt": 1730000000000
 }
 ```
@@ -55,6 +57,13 @@ Every frame is one JSON object mirroring `PartyMessage` in the Swift app:
   becomes the host; everyone else is a viewer.
 - `play` / `pause` / `seek` / `sync` / `chat` are relayed to everyone else in
   the same room (never echoed back to the sender).
+- `ping` / `pong` implement clock sync: the server replies to the sender with a
+  `pong` that echoes `clientTime` and adds the current `serverTime`, so each
+  client can estimate its offset + round-trip time to the shared server clock.
+- On relayed `play` / `pause` / `seek` / `sync`, the server ensures a
+  `serverTime` (the sample moment on the shared clock) is present — stamping one
+  as a fallback if the sender hadn't finished clock-syncing. Receivers use it to
+  compensate for the message's in-flight latency.
 - The server sends `hello` (room state) to a newcomer and broadcasts `roster`
   whenever membership changes. If the host leaves, the oldest remaining member
   is promoted.

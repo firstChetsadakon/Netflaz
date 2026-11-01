@@ -13,8 +13,11 @@ import Combine
 ///    room reacts immediately.
 ///  • Remote transport events are applied straight to the player (never
 ///    re-broadcast), so there is no feedback loop.
-///  • Participants continuously reconcile against the host's heartbeat: if
-///    they drift more than `driftThreshold` seconds, they seek to catch up.
+///  • **Latency compensation:** every transport/sync event carries the moment
+///    it was sampled, expressed on a shared clock (`ClockSync`). Receivers
+///    advance the target position by the time the message actually spent in
+///    flight, so viewers land on the host's *current* position — not where it
+///    was when the packet left.
 ///
 /// This is the same idea behind Teleparty / SharePlay-style "watch together",
 /// built from scratch on a plain WebSocket.
@@ -32,6 +35,7 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
     @Published private(set) var isPlaying = false
     @Published private(set) var currentTime: Double = 0
     @Published private(set) var duration: Double = 0
+    @Published private(set) var rttMillis: Int = 0
 
     // MARK: Config
     let media: Media
@@ -45,9 +49,11 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
 
     // MARK: Internals
     private let client = WatchPartyClient()
+    private let clock = ClockSync()
     private var timeObserver: Any?
     private var syncTimer: Timer?
-    private let driftThreshold: Double = 1.5
+    private var pingTimer: Timer?
+    private let driftThreshold: Double = 0.5
 
     init(media: Media, userName: String, roomId: String, serverURL: URL, isHost: Bool) {
         self.media = media
@@ -73,8 +79,8 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
     }
 
     func leave() {
-        syncTimer?.invalidate()
-        syncTimer = nil
+        syncTimer?.invalidate(); syncTimer = nil
+        pingTimer?.invalidate(); pingTimer = nil
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
             self.timeObserver = nil
@@ -87,9 +93,7 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
 
     // MARK: - Local transport (driven by the custom player controls)
 
-    func togglePlayPause() {
-        isPlaying ? pause() : play()
-    }
+    func togglePlayPause() { isPlaying ? pause() : play() }
 
     func play() {
         player.play()
@@ -113,8 +117,6 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         send(.chat, text: trimmed)
-        // Optimistic local echo (the server does not bounce messages back to
-        // their sender).
         chat.append(ChatMessage(userId: userId, userName: userName, text: trimmed, date: Date()))
     }
 
@@ -122,28 +124,35 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
 
     func partyClientDidConnect(_ client: WatchPartyClient) {
         connectionState = .connected
-        // Announce ourselves; `text` carries our desired role.
+        startClockSync()
         send(.join, text: isHost ? "host" : "viewer")
         appendSystem("เชื่อมต่อห้อง \"\(roomId)\" สำเร็จ")
         if isHost { startHostHeartbeat() }
     }
 
     func partyClient(_ client: WatchPartyClient, didReceive message: PartyMessage) {
-        // Ignore anything we sent ourselves (safety — the server already
-        // excludes the sender).
-        if message.userId == userId, message.type != .roster, message.type != .hello {
+        if message.type == .pong {
+            if let c = message.clientTime, let s = message.serverTime {
+                clock.handlePong(clientSend: c, serverTime: s)
+                rttMillis = Int(clock.rttMillis.rounded())
+            }
             return
         }
 
+        if message.userId == userId, message.type != .roster, message.type != .hello { return }
+
         switch message.type {
         case .play:
-            applyRemote { if let t = message.time { self.seekPlayer(to: t) }; self.player.play(); self.isPlaying = true }
+            let target = compensatedTarget(message) ?? 0
+            seekPlayer(to: target); player.play(); isPlaying = true
         case .pause:
-            applyRemote { if let t = message.time { self.seekPlayer(to: t) }; self.player.pause(); self.isPlaying = false }
+            if let t = message.time { seekPlayer(to: t) }
+            player.pause(); isPlaying = false
         case .seek:
-            applyRemote { if let t = message.time { self.seekPlayer(to: t); self.currentTime = t } }
+            let target = compensatedTarget(message) ?? (message.time ?? 0)
+            seekPlayer(to: target); currentTime = target
         case .sync:
-            reconcile(toward: message)
+            reconcile(message)
         case .chat:
             if let text = message.text {
                 chat.append(ChatMessage(userId: message.userId, userName: message.userName, text: text, date: Date()))
@@ -158,25 +167,34 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
                     Participant(id: $0.userId, name: $0.userName, isHost: $0.isHost, isMe: $0.userId == userId)
                 }
             }
+        case .ping, .pong:
+            break
         }
     }
 
     func partyClient(_ client: WatchPartyClient, didCloseWith error: Error?) {
         syncTimer?.invalidate()
+        pingTimer?.invalidate()
         connectionState = .closed(error?.localizedDescription ?? "การเชื่อมต่อถูกปิด")
         appendSystem("หลุดการเชื่อมต่อ — ลองกดเชื่อมต่อใหม่")
     }
 
-    // MARK: - Helpers
+    // MARK: - Latency compensation
 
-    /// Applies a block of player mutations caused by a *remote* event.
-    private func applyRemote(_ block: () -> Void) {
-        block()
+    /// Advance a remote sample by the time it spent travelling, so we land on
+    /// the sender's *current* position. Falls back to the raw time if we
+    /// haven't synced clocks yet or the message carries no sample timestamp.
+    private func compensatedTarget(_ message: PartyMessage) -> Double? {
+        guard let media = message.time else { return nil }
+        guard clock.isSynced, let sampledAt = message.serverTime else { return media }
+        let elapsed = max(0, (clock.serverNowMillis() - sampledAt) / 1000)
+        let playing = message.isPlaying ?? false
+        return media + (playing ? elapsed : 0)
     }
 
     /// Participants nudge themselves toward the host's authoritative heartbeat.
-    private func reconcile(toward message: PartyMessage) {
-        guard !isHost, let target = message.time else { return }
+    private func reconcile(_ message: PartyMessage) {
+        guard !isHost, let target = compensatedTarget(message) else { return }
         let local = player.currentTime().seconds
         if local.isFinite, abs(local - target) > driftThreshold {
             seekPlayer(to: target)
@@ -190,6 +208,8 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
         }
     }
 
+    // MARK: - Timers
+
     private func startHostHeartbeat() {
         syncTimer?.invalidate()
         let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -201,6 +221,29 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
         RunLoop.main.add(timer, forMode: .common)
         syncTimer = timer
     }
+
+    private func startClockSync() {
+        // A quick burst converges the offset fast, then we keep it fresh.
+        for i in 0..<4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.25) { [weak self] in
+                self?.pingServer()
+            }
+        }
+        pingTimer?.invalidate()
+        let timer = Timer(timeInterval: 4.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pingServer() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pingTimer = timer
+    }
+
+    private func pingServer() {
+        guard client.isConnected else { return }
+        client.send(PartyMessage(type: .ping, roomId: roomId, userId: userId, userName: userName,
+                                 clientTime: clock.nowMillis()))
+    }
+
+    // MARK: - Player helpers
 
     private func seekPlayer(to time: Double) {
         let clamped = max(0, time)
@@ -218,14 +261,13 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
                 let d = item.duration.seconds
                 if d.isFinite, d > 0 { self.duration = d }
             }
-            // Keep the play/pause button honest even if playback stalls/ends.
             self.isPlaying = self.player.timeControlStatus != .paused
         }
     }
 
     private func send(_ type: PartyMessage.Kind, time: Double? = nil, text: String? = nil) {
         guard client.isConnected else { return }
-        let message = PartyMessage(
+        var message = PartyMessage(
             type: type,
             roomId: roomId,
             userId: userId,
@@ -234,6 +276,11 @@ final class WatchPartyViewModel: NSObject, ObservableObject, WatchPartyClientDel
             isPlaying: isPlaying,
             text: text
         )
+        // Stamp transport/sync events with the shared-clock sample time so
+        // receivers can compensate for transit delay.
+        if clock.isSynced, [.play, .pause, .seek, .sync].contains(type) {
+            message.serverTime = clock.serverNowMillis()
+        }
         client.send(message)
     }
 
