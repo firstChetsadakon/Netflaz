@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MediaDetailView: View {
     let media: Media
@@ -19,6 +20,8 @@ struct MediaDetailView: View {
                     } else {
                         notPlayableNote
                     }
+
+                    netflixButton
 
                     Text(media.overview)
                         .font(.body)
@@ -104,6 +107,33 @@ struct MediaDetailView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(Theme.brand, in: RoundedRectangle(cornerRadius: 8))
             }
+        }
+    }
+
+    /// The legitimate bridge to Netflix: deep-link into the user's own
+    /// official Netflix app (or the website) to find this title. No login,
+    /// no API, no DRM — just handing off to the app they already use.
+    private var netflixButton: some View {
+        Button {
+            openInNetflix(title: media.title)
+        } label: {
+            Label("ค้นหาใน Netflix", systemImage: "arrow.up.forward.app.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.25)))
+        }
+    }
+
+    private func openInNetflix(title: String) {
+        let query = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let appURL = URL(string: "nflx://www.netflix.com/search?q=\(query)")
+        let webURL = URL(string: "https://www.netflix.com/search?q=\(query)")
+        if let appURL, UIApplication.shared.canOpenURL(appURL) {
+            UIApplication.shared.open(appURL)
+        } else if let webURL {
+            UIApplication.shared.open(webURL)
         }
     }
 

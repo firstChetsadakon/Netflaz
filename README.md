@@ -32,8 +32,13 @@ client ที่เข้าถึงระบบเขาโดยไม่ไ�
 
 - หน้าแรกสไตล์ Netflix: แบนเนอร์เด่น + แถวเลื่อนแนวนอน
 - หน้ารายละเอียด + เล่นเดี่ยว (AVKit)
-- **Watch Party**: สร้าง/เข้าร่วมห้องด้วยรหัส, ซิงก์ play/pause/seek, แก้ drift
-  อัตโนมัติตามโฮสต์, รายชื่อผู้ชม และแชตเรียลไทม์
+- **Watch Party (ในแอป)**: สร้าง/เข้าร่วมห้องด้วยรหัส, ซิงก์ play/pause/seek, แก้
+  drift อัตโนมัติตามโฮสต์, รายชื่อผู้ชม และแชตเรียลไทม์
+- **Co-Watch แบบเว็บ (Teleparty-style)**: ฝังหน้าเว็บด้วย `WKWebView` แล้วฉีด JS
+  ไปเกาะ `<video>` เพื่อซิงก์ข้ามเครื่อง — หลักการเดียวกับส่วนขยาย Teleparty
+  (ดู [docs/TELEPARTY-APPROACH.md](docs/TELEPARTY-APPROACH.md))
+- **สะพานเชื่อม Netflix ที่ถูกต้อง**: ปุ่ม "ค้นหาใน Netflix" deep-link เข้าแอป
+  Netflix ทางการของผู้ใช้ (ไม่มีล็อกอินผ่านเรา/ไม่มี API/ไม่มี DRM)
 - รองรับ TMDB แบบไม่บังคับ (ใส่ API key ในแท็บตั้งค่า)
 
 ## 🧱 สถาปัตยกรรม
@@ -51,9 +56,12 @@ Netflaz/
 │   │   └── WatchPartyClient.swift# WebSocket client (URLSessionWebSocketTask)
 │   ├── ViewModels/
 │   │   ├── HomeViewModel.swift
-│   │   └── WatchPartyViewModel.swift  # ⭐ หัวใจการซิงก์ player
-│   ├── Views/                  # Home, Detail, Player, WatchParty, Settings
+│   │   ├── WatchPartyViewModel.swift  # ⭐ ซิงก์ AVPlayer (โหมดในแอป)
+│   │   └── WebCoWatchViewModel.swift  # ⭐ ซิงก์ <video> ในเว็บ (โหมด Teleparty)
+│   ├── Views/                  # Home, Detail, Player, WatchParty, WebCoWatch, Settings
 │   └── Theme/
+├── docs/
+│   └── TELEPARTY-APPROACH.md   # กลไก Teleparty + ข้อจำกัดกับ Netflix
 └── server/                    # เซิร์ฟเวอร์ซิงก์ Node.js (WebSocket)
     └── server.js
 ```

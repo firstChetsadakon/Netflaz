@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Where you set up a shared viewing session: pick a title, choose a room
-/// code, and either host a new room or join an existing one.
+/// Where you set up a shared viewing session: pick a title, choose how you'll
+/// watch (in-app open content, or a Teleparty-style web page), set a room
+/// code, then host or join.
 struct WatchPartyLobbyView: View {
     var preselected: Media? = nil
 
@@ -11,14 +12,19 @@ struct WatchPartyLobbyView: View {
     @State private var selected: Media
     @State private var roomCode: String
     @State private var wrapInStack: Bool
+    @State private var mode: Mode = .inApp
+    @State private var webURL = ""
+
+    enum Mode: String, CaseIterable {
+        case inApp = "ในแอป"
+        case web = "เว็บ (Teleparty)"
+    }
 
     init(preselected: Media? = nil) {
         self.preselected = preselected
         let playable = SampleContent.all.filter { $0.isPlayable }
         _selected = State(initialValue: preselected ?? playable.first ?? SampleContent.all[0])
         _roomCode = State(initialValue: Self.randomCode())
-        // When opened from a Detail screen we're already inside a navigation
-        // stack; as a tab we need to provide our own.
         _wrapInStack = State(initialValue: preselected == nil)
     }
 
@@ -44,7 +50,18 @@ struct WatchPartyLobbyView: View {
                         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
                 }
 
-                section("เลือกเรื่องที่จะดูด้วยกัน") {
+                section("โหมดการดู") {
+                    Picker("", selection: $mode) {
+                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(mode == .inApp
+                         ? "เล่นสื่อแบบเปิดในแอปด้วย AVPlayer ซิงก์กันเป๊ะทุกคน"
+                         : "ฝังหน้าเว็บแล้วเกาะ <video> เพื่อซิงก์ (หลักการเดียวกับ Teleparty)")
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                }
+
+                section("เลือกเรื่อง") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(SampleContent.all.filter { $0.isPlayable }) { media in
@@ -59,6 +76,19 @@ struct WatchPartyLobbyView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                    }
+                }
+
+                if mode == .web {
+                    section("ลิงก์หน้าเว็บ (ไม่บังคับ)") {
+                        TextField("https://… (เว้นว่างเพื่อใช้คลิปในแอป)", text: $webURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(12)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                        Text("ใส่ได้เฉพาะหน้าที่ฝังได้ (สื่อเปิด/เว็บของคุณเอง) บริการที่มี DRM จะบล็อกการฝังและผิด ToS")
+                            .font(.caption).foregroundStyle(Theme.textSecondary)
                     }
                 }
 
@@ -96,7 +126,11 @@ struct WatchPartyLobbyView: View {
         .navigationTitle("ดูด้วยกัน")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: WatchPartyConfig.self) { config in
-            WatchPartyRoomView(config: config)
+            if config.isWeb {
+                WebCoWatchView(config: config)
+            } else {
+                WatchPartyRoomView(config: config)
+            }
         }
     }
 
@@ -111,7 +145,7 @@ struct WatchPartyLobbyView: View {
 
     private var buttons: some View {
         VStack(spacing: 12) {
-            NavigationLink(value: WatchPartyConfig(mediaId: selected.id, roomId: normalizedCode, isHost: true)) {
+            NavigationLink(value: makeConfig(isHost: true)) {
                 Label("สร้างห้อง (เป็นโฮสต์)", systemImage: "crown.fill")
                     .font(.headline).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -119,7 +153,7 @@ struct WatchPartyLobbyView: View {
             }
             .disabled(normalizedCode.isEmpty)
 
-            NavigationLink(value: WatchPartyConfig(mediaId: selected.id, roomId: normalizedCode, isHost: false)) {
+            NavigationLink(value: makeConfig(isHost: false)) {
                 Label("เข้าร่วมห้อง", systemImage: "arrow.right.circle.fill")
                     .font(.headline).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -127,6 +161,17 @@ struct WatchPartyLobbyView: View {
             }
             .disabled(normalizedCode.isEmpty)
         }
+    }
+
+    private func makeConfig(isHost: Bool) -> WatchPartyConfig {
+        let trimmedURL = webURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return WatchPartyConfig(
+            mediaId: selected.id,
+            roomId: normalizedCode,
+            isHost: isHost,
+            isWeb: mode == .web,
+            sourceURL: (mode == .web && !trimmedURL.isEmpty) ? trimmedURL : nil
+        )
     }
 
     private var normalizedCode: String {
@@ -151,4 +196,6 @@ struct WatchPartyConfig: Hashable {
     let mediaId: String
     let roomId: String
     let isHost: Bool
+    var isWeb: Bool = false
+    var sourceURL: String? = nil
 }
