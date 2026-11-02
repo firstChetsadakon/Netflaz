@@ -6,9 +6,6 @@ struct RootView: View {
             HomeView()
                 .tabItem { Label("หน้าแรก", systemImage: "house.fill") }
 
-            WatchPartyLobbyView()
-                .tabItem { Label("ดูด้วยกัน", systemImage: "person.2.fill") }
-
             SettingsView()
                 .tabItem { Label("ตั้งค่า", systemImage: "gearshape.fill") }
         }

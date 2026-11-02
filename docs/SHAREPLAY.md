@@ -43,13 +43,15 @@ player.playbackCoordinator.coordinateWithSession(session)
 
 - ต้องใช้ **อุปกรณ์จริง 2 เครื่อง** (Simulator เล่น SharePlay จริงไม่ได้) ล็อกอิน Apple ID
 - โทร **FaceTime** หากัน
-- เปิดแอป → เลือกเรื่อง → **ดูผ่าน SharePlay (FaceTime)** → **เริ่ม SharePlay**
+- เปิดแอป → เลือกเรื่อง → **ดูด้วยกันผ่าน SharePlay (FaceTime)** → **เริ่ม SharePlay**
 - อีกฝั่งกดเข้าร่วมจากแบนเนอร์ SharePlay แล้วลองกดเล่น/หยุด — จะซิงก์กันเอง
 
-## เทียบกับโหมดอื่นในแอป
+## ทำไมเลือก SharePlay
 
-| โหมด | กลไก sync | ข้ามแพลตฟอร์ม | ต้องมีเซิร์ฟเวอร์ | เหมาะกับ |
-|---|---|---|---|---|
-| Watch Party (ในแอป) | WebSocket + ชดเชยดีเลย์เราเขียนเอง | ได้ (Android/เว็บได้ในอนาคต) | ต้องมี | เรียนรู้หลักการ, คุมเองทุกอย่าง |
-| Co-Watch (เว็บ, Teleparty) | ฉีด JS เกาะ `<video>` + WebSocket | ได้ | ต้องมี | เนื้อหาบนหน้าเว็บที่ฝังได้ |
-| **SharePlay** | iOS/GroupActivities ซิงก์ให้ | เฉพาะ Apple | **ไม่ต้อง** | ประสบการณ์ native ลื่นสุดบน iOS |
+| ข้อดี | รายละเอียด |
+|---|---|
+| ไม่ต้องมีเซิร์ฟเวอร์ | iOS/GroupActivities ซิงก์ให้เอง ไม่ต้องรัน/ดูแล WebSocket server |
+| ซิงก์แม่น | Apple จัดการ latency compensation ให้ในระดับระบบ |
+| native | รวมกับ FaceTime (เสียง/วิดีโอคู่กับการดู) และ UI ของ iOS |
+
+ข้อแลกเปลี่ยน: ใช้ได้เฉพาะในระบบนิเวศ Apple และเฉพาะคอนเทนต์ที่แอปเล่นเอง

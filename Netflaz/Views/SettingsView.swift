@@ -1,28 +1,11 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("displayName") private var displayName = ""
-    @AppStorage("serverURL") private var serverURL = "ws://localhost:8080"
     @AppStorage("tmdbKey") private var tmdbKey = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("โปรไฟล์") {
-                    TextField("ชื่อที่จะแสดงในห้อง", text: $displayName)
-                }
-
-                Section {
-                    TextField("ws://localhost:8080", text: $serverURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                } header: {
-                    Text("เซิร์ฟเวอร์ Watch Party")
-                } footer: {
-                    Text("ที่อยู่ WebSocket ของเซิร์ฟเวอร์ซิงก์ รันได้จากโฟลเดอร์ server/ (ดู README) ใช้ ws:// สำหรับทดสอบในเครื่อง หรือ wss:// เมื่อดีพลอยจริง")
-                }
-
                 Section {
                     SecureField("ใส่ TMDB API key (ถ้ามี)", text: $tmdbKey)
                 } header: {
@@ -34,8 +17,8 @@ struct SettingsView: View {
                 Section {
                     aboutRow(icon: "checkmark.shield.fill", title: "เนื้อหาถูกลิขสิทธิ์",
                              detail: "เล่นเฉพาะสื่อแบบเปิด (CC/สาธารณสมบัติ) ไม่มีการถอด DRM")
-                    aboutRow(icon: "person.2.fill", title: "Watch Party",
-                             detail: "ซิงก์การเล่นผ่าน WebSocket ที่เขียนเอง ไม่พึ่งบริการภายนอก")
+                    aboutRow(icon: "shareplay", title: "ดูด้วยกันด้วย SharePlay",
+                             detail: "ซิงก์การเล่นผ่าน FaceTime โดย iOS จัดการให้ ไม่ต้องมีเซิร์ฟเวอร์")
                     aboutRow(icon: "book.closed.fill", title: "จุดประสงค์",
                              detail: "สาธิตหลักการแอปสตรีมมิงเพื่อการศึกษา")
                 } header: {

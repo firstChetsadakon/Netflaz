@@ -5,7 +5,7 @@ import Foundation
 /// Every title here is Creative Commons / open content with a stable, public
 /// MP4 URL (the Blender Open Movies and Google's public sample-video bucket),
 /// so playback is fully legal and needs no DRM. This is what makes the whole
-/// demo honest: we learn the streaming + Watch Party principles on content we
+/// demo honest: we learn the streaming + SharePlay co-watch principles on content we
 /// are actually allowed to stream.
 enum SampleContent {
 
@@ -78,7 +78,7 @@ enum SampleContent {
         demo("for-bigger-blazes", "For Bigger Blazes", "ForBiggerBlazes.mp4",
              "คลิปสาธิตสั้นสำหรับทดสอบการสตรีมวิดีโอความละเอียดสูงบนทุกหน้าจอ."),
         demo("for-bigger-escapes", "For Bigger Escapes", "ForBiggerEscapes.mp4",
-             "คลิปสาธิตการเล่นวิดีโอแบบลื่นไหล เหมาะกับการทดสอบ Watch Party."),
+             "คลิปสาธิตการเล่นวิดีโอแบบลื่นไหล เหมาะกับการทดสอบการดูด้วยกัน."),
         demo("for-bigger-fun", "For Bigger Fun", "ForBiggerFun.mp4",
              "วิดีโอตัวอย่างสำหรับทดสอบการ sync ตำแหน่งการเล่นระหว่างผู้ชมหลายคน."),
         demo("for-bigger-joyrides", "For Bigger Joyrides", "ForBiggerJoyrides.mp4",

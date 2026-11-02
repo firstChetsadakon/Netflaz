@@ -16,7 +16,7 @@ final class HomeViewModel: ObservableObject {
         rows = [
             MediaRowData(title: "เล่นได้จริง · Open Cinema", items: SampleContent.all),
             MediaRowData(title: "แอนิเมชันโอเพนซอร์ส", items: SampleContent.animation),
-            MediaRowData(title: "คลิปสำหรับทดสอบ Watch Party", items: SampleContent.demos),
+            MediaRowData(title: "คลิปสาธิตสั้นๆ", items: SampleContent.demos),
         ]
         Task { await loadTMDB() }
     }

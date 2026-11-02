@@ -48,12 +48,5 @@
 	<array>
 		<string>nflx</string>
 	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Netflaz uses the local network to sync Watch Party playback with a nearby sync server.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 </dict>
 </plist>

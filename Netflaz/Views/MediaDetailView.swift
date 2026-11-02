@@ -5,7 +5,6 @@ struct MediaDetailView: View {
     let media: Media
 
     @State private var showPlayer = false
-    @State private var showParty = false
     @State private var showSharePlay = false
 
     var body: some View {
@@ -41,9 +40,6 @@ struct MediaDetailView: View {
         }
         .fullScreenCover(isPresented: $showSharePlay) {
             SharePlayPlayerView(media: media)
-        }
-        .navigationDestination(isPresented: $showParty) {
-            WatchPartyLobbyView(preselected: media)
         }
     }
 
@@ -104,21 +100,12 @@ struct MediaDetailView: View {
             }
 
             Button {
-                showParty = true
+                showSharePlay = true
             } label: {
-                Label("ชวนดูด้วยกัน (Watch Party)", systemImage: "person.2.fill")
+                Label("ดูด้วยกันผ่าน SharePlay (FaceTime)", systemImage: "shareplay")
                     .font(.headline).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(Theme.brand, in: RoundedRectangle(cornerRadius: 8))
-            }
-
-            Button {
-                showSharePlay = true
-            } label: {
-                Label("ดูผ่าน SharePlay (FaceTime)", systemImage: "shareplay")
-                    .font(.headline).foregroundStyle(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 13)
-                    .background(Theme.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
             }
         }
     }
