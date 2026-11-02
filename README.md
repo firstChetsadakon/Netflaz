@@ -37,6 +37,9 @@ client ที่เข้าถึงระบบเขาโดยไม่ไ�
 - **Co-Watch แบบเว็บ (Teleparty-style)**: ฝังหน้าเว็บด้วย `WKWebView` แล้วฉีด JS
   ไปเกาะ `<video>` เพื่อซิงก์ข้ามเครื่อง — หลักการเดียวกับส่วนขยาย Teleparty
   (ดู [docs/TELEPARTY-APPROACH.md](docs/TELEPARTY-APPROACH.md))
+- **SharePlay (GroupActivities)**: ดูด้วยกันผ่าน FaceTime โดย iOS ซิงก์การเล่นให้
+  อัตโนมัติ (ไม่ต้องมีเซิร์ฟเวอร์) สำหรับคอนเทนต์เปิดของแอปเอง — Netflix ใช้ไม่ได้
+  เพราะต้อง Netflix เอง adopt (ดู [docs/SHAREPLAY.md](docs/SHAREPLAY.md))
 - **สะพานเชื่อม Netflix ที่ถูกต้อง**: ปุ่ม "ค้นหาใน Netflix" deep-link เข้าแอป
   Netflix ทางการของผู้ใช้ (ไม่มีล็อกอินผ่านเรา/ไม่มี API/ไม่มี DRM)
 - รองรับ TMDB แบบไม่บังคับ (ใส่ API key ในแท็บตั้งค่า)
@@ -53,15 +56,22 @@ Netflaz/
 │   ├── Services/
 │   │   ├── SampleContent.swift   # แคตตาล็อกสื่อแบบเปิด (เล่นได้จริง)
 │   │   ├── TMDBService.swift     # ดึงเมตาดาตาจาก TMDB (ไม่บังคับ)
-│   │   └── WatchPartyClient.swift# WebSocket client (URLSessionWebSocketTask)
+│   │   ├── WatchPartyClient.swift# WebSocket client (URLSessionWebSocketTask)
+│   │   ├── ClockSync.swift       # ซิงก์นาฬิกาแบบ NTP (latency compensation)
+│   │   ├── WatchTogetherActivity.swift # นิยาม SharePlay GroupActivity
+│   │   └── SharePlayCoordinator.swift  # จัดการ session + ผูก playbackCoordinator
 │   ├── ViewModels/
 │   │   ├── HomeViewModel.swift
 │   │   ├── WatchPartyViewModel.swift  # ⭐ ซิงก์ AVPlayer (โหมดในแอป)
 │   │   └── WebCoWatchViewModel.swift  # ⭐ ซิงก์ <video> ในเว็บ (โหมด Teleparty)
-│   ├── Views/                  # Home, Detail, Player, WatchParty, WebCoWatch, Settings
+│   ├── Views/                  # Home, Detail, Player, WatchParty, WebCoWatch, SharePlay, Settings
 │   └── Theme/
+├── Config/
+│   ├── Info.plist
+│   └── Netflaz.entitlements    # ตัวอย่าง entitlement สำหรับ Group Activities
 ├── docs/
-│   └── TELEPARTY-APPROACH.md   # กลไก Teleparty + ข้อจำกัดกับ Netflix
+│   ├── TELEPARTY-APPROACH.md   # กลไก Teleparty + ข้อจำกัดกับ Netflix
+│   └── SHAREPLAY.md            # SharePlay + ทำไม Netflix ใช้ไม่ได้
 └── server/                    # เซิร์ฟเวอร์ซิงก์ Node.js (WebSocket)
     └── server.js
 ```

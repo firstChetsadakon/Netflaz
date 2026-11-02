@@ -6,6 +6,7 @@ struct MediaDetailView: View {
 
     @State private var showPlayer = false
     @State private var showParty = false
+    @State private var showSharePlay = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -37,6 +38,9 @@ struct MediaDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $showPlayer) {
             SoloPlayerView(media: media)
+        }
+        .fullScreenCover(isPresented: $showSharePlay) {
+            SharePlayPlayerView(media: media)
         }
         .navigationDestination(isPresented: $showParty) {
             WatchPartyLobbyView(preselected: media)
@@ -106,6 +110,15 @@ struct MediaDetailView: View {
                     .font(.headline).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(Theme.brand, in: RoundedRectangle(cornerRadius: 8))
+            }
+
+            Button {
+                showSharePlay = true
+            } label: {
+                Label("ดูผ่าน SharePlay (FaceTime)", systemImage: "shareplay")
+                    .font(.headline).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 13)
+                    .background(Theme.surfaceElevated, in: RoundedRectangle(cornerRadius: 8))
             }
         }
     }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Required for SharePlay / GroupActivities.
+	  This file is provided for reference. The recommended way to enable it is
+	  via Xcode: target → Signing & Capabilities → "+ Capability" → "Group
+	  Activities". Xcode will create/assign an entitlements file and wire the
+	  CODE_SIGN_ENTITLEMENTS build setting for you (and handle provisioning).
+	  See docs/SHAREPLAY.md.
+	-->
+	<key>com.apple.developer.group-session</key>
+	<true/>
+</dict>
+</plist>
