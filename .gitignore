@@ -18,7 +18,10 @@ xcuserdata/
 # macOS
 .DS_Store
 
-# Node (sync server)
+# Node (sync server, tests)
 node_modules/
 npm-debug.log*
 .env
+
+# Scratch build/test output
+.build-logs/

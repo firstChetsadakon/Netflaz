@@ -9,7 +9,7 @@
 //   type ∈ join | leave | play | pause | seek | sync | chat | roster | hello
 //
 // Run:  cd server && npm install && npm start
-// Then point the app's "เซิร์ฟเวอร์ซิงก์" setting at ws://<this-machine-ip>:8080
+// Then point the extension's sync-server setting at ws://<this-machine-ip>:8080
 
 import { WebSocketServer } from "ws";
 
