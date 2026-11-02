@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Test Movie</title></head>
+<body style="margin:0;background:#000">
+<video id="v" src="silence.wav" preload="auto" width="640" height="360"></video>
+<script>
+  // Count media events so the test can detect echo loops.
+  const v = document.getElementById('v');
+  window.__ev = { play: 0, pause: 0, seeked: 0 };
+  ['play', 'pause', 'seeked'].forEach((t) => v.addEventListener(t, () => window.__ev[t]++));
+</script>
+</body>
+</html>
