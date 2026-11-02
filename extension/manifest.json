@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Netflaz Party",
+  "version": "1.0.0",
+  "description": "ดูวิดีโอพร้อมเพื่อนแบบ Teleparty: ซิงก์ เล่น/หยุด/เลื่อน + แชต — แต่ละคนใช้บัญชีของตัวเอง",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Netflaz Party",
+    "default_popup": "popup.html"
+  }
+}

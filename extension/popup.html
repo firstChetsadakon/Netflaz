@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>Netflaz Party</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Netflaz Party</h1>
+
+  <section id="idle" hidden>
+    <label>ชื่อของคุณ
+      <input id="name" maxlength="30" placeholder="เช่น First">
+    </label>
+    <label>รหัสห้อง
+      <span class="row">
+        <input id="room" maxlength="12" autocomplete="off">
+        <button id="dice" type="button" title="สุ่มรหัสใหม่">🎲</button>
+      </span>
+    </label>
+    <details>
+      <summary>เซิร์ฟเวอร์ซิงก์</summary>
+      <input id="server" placeholder="ws://localhost:8080" autocomplete="off">
+    </details>
+    <button id="create" class="primary">สร้างห้อง (เป็นโฮสต์)</button>
+    <button id="join">เข้าร่วมห้อง</button>
+    <p class="hint">เปิดหน้าวิดีโอไว้ก่อน แล้วกดที่ส่วนขยายบนแท็บนั้น
+      ทุกคนเปิดเรื่องเดียวกันด้วยบัญชีของตัวเอง</p>
+  </section>
+
+  <section id="active" hidden>
+    <p id="status" class="status"></p>
+    <p class="room">รหัสห้อง <strong id="roomCode"></strong>
+      <button id="copy" type="button">คัดลอก</button></p>
+    <ul id="people"></ul>
+    <button id="leave">ออกจากห้อง</button>
+  </section>
+
+  <p id="error" class="error" hidden></p>
+  <script src="popup.js"></script>
+</body>
+</html>
